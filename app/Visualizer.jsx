@@ -182,5 +182,5 @@ export default function Visualizer({ paramsRef }) {
     };
   }, [paramsRef]);
 
-  return <div ref={mountRef} style={{ width: "100%", height: "56vh", borderRadius: 12, overflow: "hidden" }} />;
+  return <div ref={mountRef} className="viz-canvas" />;
 }

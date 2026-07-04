@@ -16,7 +16,6 @@ export default function Page() {
   const [audioStat, setAudioStat] = useState({ bytesReceived: 0, framesDecoded: 0, queuedFrames: 0 });
   const [snapshot, setSnapshot] = useState(null);
 
-  // 讀 /api/config 顯示來源 (mock / real_lyria)。
   useEffect(() => {
     fetch(`${API_BASE}/api/config`)
       .then((r) => r.json())
@@ -24,7 +23,6 @@ export default function Page() {
       .catch(() => setSource("(後端未啟動)"));
   }, []);
 
-  // 參數 WS: 持續接收 11 通道快照驅動視覺。
   useEffect(() => {
     let ws;
     let closed = false;
@@ -64,75 +62,117 @@ export default function Page() {
 
   const m = snapshot?.music || {};
   const c = snapshot?.clusters || {};
+  const isLive = source === "real_lyria";
+  const kbReceived = (audioStat.bytesReceived / 1024).toFixed(0);
 
   return (
-    <main style={{ maxWidth: 1080, margin: "0 auto", padding: "24px 20px" }}>
-      <header style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-        <h1 style={{ fontSize: 22, margin: 0 }}>NeurIPS2026 · Lyria 即時串流</h1>
-        <span style={{ opacity: 0.7, fontSize: 13 }}>
-          Environment ↔ AI agency · AS7341 11 通道 → Lyria RealTime
-        </span>
+    <div className="page">
+      <nav className="nav">
+        <span className="nav-brand">Wild · Wave</span>
+        <span className="nav-meta">NeurIPS 2026</span>
+      </nav>
+
+      <header className="hero">
+        <p className="hero-eyebrow">Environment ↔ AI agency</p>
+        <h1 className="hero-title">Turn light into sound.</h1>
+        <p className="hero-sub">
+          AS7341 十一通道光譜即時驅動 Lyria RealTime——環境光強與 AI 密度共同塑造聲音與形體。
+        </p>
       </header>
 
-      <div style={{ display: "flex", gap: 12, margin: "16px 0", alignItems: "center", flexWrap: "wrap" }}>
+      <section className="stats-row" aria-label="即時狀態">
+        <div className="stat-card">
+          <div className={`stat-value ${isLive ? "stat-value--live" : "stat-value--mock"}`}>
+            {source === "(後端未啟動)" ? "—" : source}
+          </div>
+          <div className="stat-label">音訊來源</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{kbReceived}</div>
+          <div className="stat-label">KB 已接收</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{audioStat.framesDecoded}</div>
+          <div className="stat-label">Frames 解碼</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{audioStat.queuedFrames}</div>
+          <div className="stat-label">佇列中</div>
+        </div>
+      </section>
+
+      <div className="controls">
         <button
+          type="button"
           onClick={toggle}
-          style={{
-            background: playing ? "#e05252" : "#3a7bd5",
-            color: "#fff",
-            border: "none",
-            padding: "10px 22px",
-            borderRadius: 8,
-            fontSize: 15,
-            cursor: "pointer",
-          }}
+          className={`btn ${playing ? "btn-stop" : "btn-primary"}`}
         >
-          {playing ? "⏹ Stop" : "▶ Listen"}
+          {playing ? "Stop" : "Listen"}
         </button>
-        <span style={{ fontSize: 13, opacity: 0.85 }}>
-          來源: <b style={{ color: source === "real_lyria" ? "#4fd1c5" : "#f0b45a" }}>{source}</b>
-        </span>
-        <span style={{ fontSize: 13, opacity: 0.7 }}>
-          收到 {(audioStat.bytesReceived / 1024).toFixed(0)} KB · 解碼 {audioStat.framesDecoded} frames · 佇列 {audioStat.queuedFrames}
+        <span className="control-hint">
+          {playing ? "即時串流播放中" : "點擊開始聆聽 Lyria 輸出"}
         </span>
       </div>
 
-      <Visualizer paramsRef={paramsRef} />
-
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginTop: 16 }}>
-        <Card label="Brightness (光強)" value={m.brightness} />
-        <Card label="Density (密度)" value={m.density} />
-        <Card label="Guidance" value={m.guidance} max={6} />
-        <Card label="Cold cluster" value={c.cold} />
-        <Card label="Warm cluster" value={c.warm} />
-      </section>
-
-      <section style={{ marginTop: 16 }}>
-        <h3 style={{ fontSize: 15, margin: "0 0 8px" }}>11 通道 (AS7341)</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))", gap: 6 }}>
-          {snapshot?.channels
-            ? Object.entries(snapshot.channels).map(([k, v]) => (
-                <div key={k} style={{ fontSize: 12, background: "#0d1018", padding: "6px 10px", borderRadius: 6 }}>
-                  <div style={{ opacity: 0.6 }}>{k}</div>
-                  <div style={{ fontFamily: "monospace" }}>{Number(v).toFixed(1)}</div>
-                </div>
-              ))
-            : <span style={{ opacity: 0.5 }}>等待 /ws/params…</span>}
+      <section className="viz-section">
+        <div className="viz-header">
+          <div>
+            <p className="section-eyebrow">Live visualization</p>
+            <h2 className="section-title">光譜驅動的即時幾何體</h2>
+          </div>
+        </div>
+        <div className="viz-frame">
+          <Visualizer paramsRef={paramsRef} />
         </div>
       </section>
-    </main>
+
+      <section className="metrics-section">
+        <p className="section-eyebrow">Music parameters</p>
+        <h2 className="section-title">環境與 AI 控制量</h2>
+        <div className="metrics-grid">
+          <MetricCard label="Brightness" sublabel="光強" value={m.brightness} />
+          <MetricCard label="Density" sublabel="密度" value={m.density} />
+          <MetricCard label="Guidance" value={m.guidance} max={6} />
+          <MetricCard label="Cold cluster" value={c.cold} />
+          <MetricCard label="Warm cluster" value={c.warm} />
+        </div>
+      </section>
+
+      <section className="channels-section">
+        <p className="section-eyebrow">AS7341 · 11 channels</p>
+        <h2 className="section-title">光譜通道讀數</h2>
+        <div className="channels-grid">
+          {snapshot?.channels
+            ? Object.entries(snapshot.channels).map(([k, v]) => (
+                <div key={k} className="channel-cell">
+                  <div className="channel-name">{k}</div>
+                  <div className="channel-value">{Number(v).toFixed(1)}</div>
+                </div>
+              ))
+            : <p className="channels-empty">等待 /ws/params 連線…</p>}
+        </div>
+      </section>
+
+      <footer className="footer">
+        <span className="footer-text">Wild · Wave · NeurIPS 2026</span>
+        <span className="footer-tag">Lyria RealTime</span>
+      </footer>
+    </div>
   );
 }
 
-function Card({ label, value, max = 1 }) {
+function MetricCard({ label, sublabel, value, max = 1 }) {
   const v = value == null ? 0 : Number(value);
   const pct = Math.max(0, Math.min(100, (v / max) * 100));
   return (
-    <div style={{ background: "#0d1018", padding: 12, borderRadius: 8 }}>
-      <div style={{ fontSize: 12, opacity: 0.65 }}>{label}</div>
-      <div style={{ fontSize: 18, fontFamily: "monospace" }}>{value == null ? "—" : v.toFixed(3)}</div>
-      <div style={{ height: 4, background: "#1c2230", borderRadius: 3, marginTop: 6 }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: "#4fd1c5", borderRadius: 3 }} />
+    <div className="metric-card">
+      <div className="metric-label">
+        {label}
+        {sublabel ? ` · ${sublabel}` : ""}
+      </div>
+      <div className="metric-value">{value == null ? "—" : v.toFixed(3)}</div>
+      <div className="metric-bar">
+        <div className="metric-bar-fill" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
