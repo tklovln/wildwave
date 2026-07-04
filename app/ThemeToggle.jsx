@@ -7,7 +7,7 @@ export default function ThemeToggle() {
 
   useEffect(() => {
     const current =
-      document.documentElement.getAttribute("data-theme") || "light";
+      document.documentElement.getAttribute("data-theme") || "dark";
     setTheme(current);
   }, []);
 
