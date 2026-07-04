@@ -1,16 +1,24 @@
 // PCM 播放 AudioWorklet processor。
-// 主執行緒把 Float32 樣本 (已從 s16le 解碼、去交錯為單聲道混音或雙聲道) 經 port
-// 送進來排入 ring queue；process() 依 render quantum 逐一取出播放。
-// 佇列空時輸出靜音 (避免爆音)，不丟 underrun 例外。
+// 主執行緒把已從 s16le 解碼、分軌的 {left, right} Float32 送進來排入 ring queue；
+// process() 依 render quantum 逐一取出播放。
+//
+// jitter buffer 策略 (避免破音):
+//   - 啟動時先蓄積 PREBUFFER_FRAMES 才開始播放，吸收網路/主執行緒抖動。
+//   - 佇列見底 (underrun) 時，重新進入蓄積狀態並輸出靜音，等回補到
+//     REBUFFER_FRAMES 再續播，避免逐樣本斷續產生連續爆音。
+const SAMPLE_RATE = 48000;
+const PREBUFFER_FRAMES = Math.round(SAMPLE_RATE * 0.2); // 首次啟動蓄積 ~200ms
+const REBUFFER_FRAMES = Math.round(SAMPLE_RATE * 0.12); // underrun 後回補 ~120ms
+
 class PCMPlayerProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    // 佇列: 一連串 Float32Array (每段為 interleaved L,R 或已分軌)。
-    // 為簡化，主執行緒送來的是「已分軌」的物件 {left: Float32Array, right: Float32Array}。
     this._queue = [];
     this._cur = null;
     this._pos = 0;
     this._queuedFrames = 0;
+    this._priming = true; // 蓄積中 (輸出靜音，不消耗佇列)
+    this._threshold = PREBUFFER_FRAMES;
     this.port.onmessage = (e) => {
       const d = e.data;
       if (d && d.type === "pcm") {
@@ -21,6 +29,8 @@ class PCMPlayerProcessor extends AudioWorkletProcessor {
         this._cur = null;
         this._pos = 0;
         this._queuedFrames = 0;
+        this._priming = true;
+        this._threshold = PREBUFFER_FRAMES;
       }
     };
   }
@@ -29,6 +39,19 @@ class PCMPlayerProcessor extends AudioWorkletProcessor {
     const out = outputs[0];
     const chL = out[0];
     const chR = out.length > 1 ? out[1] : out[0];
+
+    // 蓄積中：未達門檻則整個 quantum 輸出靜音，不消耗佇列。
+    if (this._priming) {
+      if (this._queuedFrames >= this._threshold) {
+        this._priming = false;
+      } else {
+        chL.fill(0);
+        if (chR !== chL) chR.fill(0);
+        this._maybeReport();
+        return true;
+      }
+    }
+
     for (let i = 0; i < chL.length; i++) {
       if (!this._cur || this._pos >= this._cur.left.length) {
         this._cur = this._queue.shift() || null;
@@ -44,11 +67,25 @@ class PCMPlayerProcessor extends AudioWorkletProcessor {
         chR[i] = 0;
       }
     }
-    // 週期回報佇列深度，供主執行緒監看 (可選)。
-    if ((currentFrame & 8191) === 0) {
-      this.port.postMessage({ type: "stat", queuedFrames: this._queuedFrames });
+
+    // 佇列見底 → 重新蓄積 (回補門檻較低，降低可聞停頓)。
+    if (this._queuedFrames === 0 && !this._cur) {
+      this._priming = true;
+      this._threshold = REBUFFER_FRAMES;
     }
+
+    this._maybeReport();
     return true;
+  }
+
+  _maybeReport() {
+    if ((currentFrame & 8191) === 0) {
+      this.port.postMessage({
+        type: "stat",
+        queuedFrames: this._queuedFrames,
+        priming: this._priming,
+      });
+    }
   }
 }
 
