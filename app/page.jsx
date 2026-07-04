@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Visualizer from "./Visualizer";
+import PromptPanel from "./PromptPanel";
 import { subscribe, getSnapshot, toggleAudio } from "./audioStore";
 import { Reveal, AnimatedNumber } from "./motion";
 
@@ -141,6 +142,8 @@ export default function Page() {
           <Visualizer paramsRef={paramsRef} />
         </Reveal>
       </section>
+
+      <PromptPanel snapshot={snapshot} apiBase={API_BASE} />
 
       <section className="metrics-section">
         <Reveal>
